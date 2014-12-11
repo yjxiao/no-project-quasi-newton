@@ -1,6 +1,8 @@
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
+from collections import deque
+
 from .exceptions import LineSearchError
 
 __all__ = ['bfgs', 'dfp', 'lbfgs']
@@ -77,7 +79,7 @@ def _line_search(fun, fp, xk, gk, pk, c1=1e-4, c2=0.9, maxiter=12):
     return alpha_star
 
 
-def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-7, adjust_init_h=False, disp=True):
+def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, disp=True):
     """ Implement Quasi Newton method with BFGS update """
 
     x0 = np.asarray(x0).flatten()
@@ -134,15 +136,17 @@ def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-7, adjust_init_h=False, disp=
             print('    Current gradient norm: {:0.8f}'.format(gknorm))
             print('    Alpha value this iteration: {:f}'.format(alpha_k))
 
+    print('Done. Total iterations: {}'.format(k))
+    
     return dict(fmin=fk, x_star=xk, gradient=gk, inv_hessian=Hk)
 
 
-def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-8, disp=True):
+def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, disp=True):
     """ implement quasi newton method with DFP update """
 
     x0 = np.asarray(x0).flatten()
     if maxiter is None:
-        maxiter = len(x0) * 200
+        maxiter = len(x0) * 100
 
     N = len(x0)
     xk = x0
@@ -186,9 +190,101 @@ def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-8, disp=True):
             print('    Current gradient norm: {:f}'.format(gknorm))
             print('    Alpha value this iteration: {:f}'.format(alpha_k))
 
+    print('Done. Total iterations: {}'.format(k))
     return dict(fmin=fk, x_star=xk, gradient=gk, inv_hessian=Hk)
 
 
-def lbfgs():
+def _reconstruct(H0, gk, s, y):
+    """ L-BFGS two-loop recursion described in Nocedal &. Wright, Numerical Optimization 
+
+    Part of the L-BFGS algorithm, should not call individually 
+
+    """
+    q = gk
+    m = len(s)
+    alpha = deque(maxlen=m)
+    for i in xrange(m-1, -1, -1):
+        si = s[i]
+        yi = y[i]
+        rhoi = 1. / np.dot(si, yi)
+        alphai = rhoi * np.dot(si, q)
+        alpha.appendleft(alphai)
+        q = q - alphai * yi
+
+    r = np.dot(H0, q)
+    for i in xrange(m):
+        si = s[i]
+        yi = y[i]
+        rhoi = 1. / np.dot(yi, si)
+        beta = rhoi * np.dot(yi, r)
+        r = r + (alpha[i]-beta) * si
+
+    return -r    # r = np.dot(Hk, gk), need to return negative
+
+    
+def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
     """ """
-    pass
+    x0 = np.asarray(x0).flatten()
+    if maxiter is None:
+        maxiter = len(x0) * 50
+
+    N = len(x0)
+    xk = x0
+    gk = fp(x0)
+    gknorm = _norm(gk)
+    Hk = np.eye(N)
+    fk = fun(x0)
+    s = deque(maxlen=maxlen)
+    y = deque(maxlen=maxlen)
+    
+    # calculate first pair
+    alpha_k = _line_search(fun, fp, xk, gk, -gk)
+    sk = - alpha_k * gk
+    yk = fp(xk+sk) - gk
+    s.append(sk)
+    y.append(yk)
+    
+    k = 0
+    while gknorm > tol:
+
+        Hk = np.dot(yk, sk) / np.dot(yk, yk) * np.eye(N)
+        pk = _reconstruct(Hk, gk, s, y)    # compute descent direction by reconstruct Hk from historic s and y
+
+        # Try line search
+        try:
+            alpha_k = _line_search(fun, fp, xk, gk, pk)
+        except LineSearchError as e:
+            # line search failed
+            print('Line search failed: {}'.format(e))
+            break
+        
+        sk = alpha_k * pk
+        xk = xk + sk
+        gk_new = fp(xk)
+        yk = gk_new - gk
+        gk = gk_new
+        gknorm = _norm(gk)
+        fk = fun(xk)
+        
+        # add new sk, yk
+        s.append(sk)
+        y.append(yk)
+
+        # display iteration info
+        if disp:
+            print('----------------------------------------------------')
+            print('    Current iteration: {:d}'.format(k+1))
+            print('    Current function value: {:f}'.format(fk))
+            print('    Current gradient norm: {:0.8f}'.format(gknorm))
+            print('    Alpha value this iteration: {:f}'.format(alpha_k))
+
+        # break if maxiter reached
+        k += 1
+        if maxiter < k:
+            break
+
+    print('Done. Total iterations: {}'.format(k))
+    
+    return dict(fmin=fk, x_star=xk, gradient=gk)
+    
+        

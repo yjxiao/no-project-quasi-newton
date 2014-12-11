@@ -1,7 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
-from .minimize import bfgs, dfp
+from .minimize import bfgs, dfp, lbfgs
 
 class Logistic_Regressor():
     """ logistic regression classifier
@@ -13,7 +13,7 @@ class Logistic_Regressor():
     C : float, default=1.0
         Regularization term, smaller C specify stronger regularization
     
-    solver : {'bfgs', 'dfp'}
+    solver : {'bfgs', 'dfp', 'lbfgs'}
         Method used to solve the optimization problem
 
     Attributes
@@ -21,11 +21,11 @@ class Logistic_Regressor():
     w : array, shape (n_features+1,)
         Coefficients of the features in the decision function
 
-    inv_hessian : array
-        Approximation of inverse Hessian produced in Quasi Newton method
-
     gradient : array
         Gradient value at the time of termination
+
+    inv_hessian : array
+        Approximation of the inverse hessian from Quasi Newton
 
     """
 
@@ -76,15 +76,18 @@ class Logistic_Regressor():
             opt = bfgs
         elif self.solver == 'dfp':
             opt = dfp
-        
+        elif self.solver == 'lbfgs':
+            opt = lbfgs
+            
         func = lambda w: 0.5 * np.dot(w, w) + self.C * np.sum(np.log(1+np.exp(-np.dot(_X, w)*_y)))
         exp_margin = lambda w: 1 - 1. / (1 + np.exp(-np.dot(_X, w)*_y))
         fprime = lambda w: w - self.C * np.dot(_X.transpose(), exp_margin(w)*_y)
 
         results = opt(func, fprime, self.w, **options)
         self.w = results['x_star']
-        self.inv_hessian = results['inv_hessian']
         self.gradient = results['gradient']
+        if self.solver != 'lbfgs':
+            self.inv_hessian = results['inv_hessian']
 
         return self
     
