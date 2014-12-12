@@ -1,7 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
-from .minimize import bfgs, dfp, lbfgs
+from .minimize import bfgs, dfp, lbfgs, _norm
 
 class Logistic_Regressor():
     """ logistic regression classifier
@@ -30,12 +30,47 @@ class Logistic_Regressor():
     """
 
     def __init__(self, C=1.0, solver='bfgs'):
-        
         self.C = C
         self.solver = solver.lower()
         self.w = None
         self.inv_hessian = None
         self.gradient = None
+
+    def _sgd(self, X, y, batch_size=50, beta=8, maxiter=None, tol=1e-6, disp=False):
+        """ """
+        m = len(y)
+
+        if m == 1:
+            w = np.ones(len(X))
+        else:
+            w = np.ones(X.shape[1])
+        
+        if maxiter is None:
+            maxiter = int(m * 10 / batch_size)
+            print('Total iterations: {}'.format(maxiter))
+            
+        for k in xrange(maxiter):
+            start = (k * batch_size) % m
+            end = ((k+1)*batch_size) % m
+            if start < end:
+                X_batch = X[start:(end+1)]
+                y_batch = y[start:(end+1)]
+            else:
+                X_batch = np.append(X[start:], X[:(end+1)], 0)
+                y_batch = np.append(y[start:], y[:(end+1)])
+                
+            exp_margin = 1 - 1. / (1 + np.exp(-np.dot(X_batch, w)*y_batch))
+            gk = (w - self.C * np.dot(X_batch.transpose(), exp_margin*y_batch)) / batch_size
+            
+            alphak = beta / (k+1)
+            w = w - alphak * gk
+            if disp:
+                print('---------------------')
+                print('Current iteration: {}'.format(k))
+                print('current batch ||gk||: {}'.format(_norm(gk)))
+
+        self.w = w
+        self.gradient = gk
         
     def train(self, X, y, options=None):
         """ Fit the model given training data
@@ -78,7 +113,10 @@ class Logistic_Regressor():
             opt = dfp
         elif self.solver == 'lbfgs':
             opt = lbfgs
-            
+        elif self.solver == 'sgd':
+            self._sgd(_X, _y, **options)
+            return self
+        
         func = lambda w: 0.5 * np.dot(w, w) + self.C * np.sum(np.log(1+np.exp(-np.dot(_X, w)*_y)))
         exp_margin = lambda w: 1 - 1. / (1 + np.exp(-np.dot(_X, w)*_y))
         fprime = lambda w: w - self.C * np.dot(_X.transpose(), exp_margin(w)*_y)
@@ -133,3 +171,5 @@ class Logistic_Regressor():
             print('    Prediction accuracy: {:0.4f}'.format(accuracy))            
 
         return dict(precision=precision, recall=recall, accuracy=accuracy)
+
+    

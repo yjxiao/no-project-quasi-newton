@@ -6,11 +6,11 @@ import time, csv
 
 X = []
 y = []
-with open('ds1.100.csv') as f:
+with open('data_s6_f50.csv') as f:
     reader = csv.reader(f)
     for row in reader:
         X.append(map(float, row[:-1]))
-        y.append(int(row[-1]))
+        y.append(float(row[-1]))
 
 X = np.asarray(X)
 y = np.asarray(y)

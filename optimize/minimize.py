@@ -223,7 +223,7 @@ def _reconstruct(H0, gk, s, y):
 
     
 def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
-    """ """
+    """ Limited memory BFGS algorithm """
     x0 = np.asarray(x0).flatten()
     if maxiter is None:
         maxiter = len(x0) * 50
@@ -286,5 +286,7 @@ def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
     print('Done. Total iterations: {}'.format(k))
     
     return dict(fmin=fk, x_star=xk, gradient=gk)
+
+
     
         
