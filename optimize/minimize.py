@@ -79,7 +79,7 @@ def _line_search(fun, fp, xk, gk, pk, c1=1e-4, c2=0.9, maxiter=12):
     return alpha_star
 
 
-def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, disp=True):
+def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, output=False, disp=True):
     """ Implement Quasi Newton method with BFGS update """
 
     x0 = np.asarray(x0).flatten()
@@ -91,6 +91,7 @@ def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, disp=
     gk = fp(x0)
     Hk = np.eye(N)
     fk = fun(x0)
+    iters = []
     
     # heuristic trick to set initial H
     if adjust_init_h:
@@ -123,6 +124,10 @@ def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, disp=
         if gknorm < tol:
             break
 
+        # save iterations if choose to
+        if output:
+            iters.append('{:d},{:0.6f},{:0.6f}'.format(k, fk, gknorm))
+
         # update approximation of inverse Hessian using Sherman-Morrison formula
         rhok = np.dot(sk, yk)
         a1 = (rhok+np.dot(yk, np.dot(Hk, yk))) / rhok**2
@@ -137,11 +142,17 @@ def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, disp=
             print('    Alpha value this iteration: {:f}'.format(alpha_k))
 
     print('Done. Total iterations: {}'.format(k))
-    
+
+    # save the iteration infos
+    if output:
+        filename = 'iters_bfgs_f{}.csv'.format(N)
+        with open(filename, 'w') as f:
+            f.write('\n'.join(iters))
+            
     return dict(fmin=fk, x_star=xk, gradient=gk, inv_hessian=Hk)
 
 
-def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, disp=True):
+def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, output=False, disp=True):
     """ implement quasi newton method with DFP update """
 
     x0 = np.asarray(x0).flatten()
@@ -153,7 +164,8 @@ def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, disp=True):
     gk = fp(x0)
     fk = fun(x0)
     Hk = np.eye(N)
-
+    iters = []
+    
     for k in xrange(maxiter):
         pk = - np.dot(Hk, gk)    # compute descent direction
         
@@ -177,6 +189,10 @@ def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, disp=True):
         if gknorm < tol:
             break
 
+        # save iterations if choose to
+        if output:
+            iters.append('{:d},{:0.6f},{:0.6f}'.format(k, fk, gknorm))
+
         # update approx of inverse Hessian using Sherman-Morrison formula
         rhok = np.dot(Hk, yk)
         a1 = (sk[:,np.newaxis]*sk[np.newaxis,:]) / np.dot(yk, sk)
@@ -189,6 +205,12 @@ def dfp(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, disp=True):
             print('    Current function value: {:f}'.format(fk))
             print('    Current gradient norm: {:f}'.format(gknorm))
             print('    Alpha value this iteration: {:f}'.format(alpha_k))
+
+    # save the iteration infos
+    if output:
+        filename = 'iters_dfp_f{}.csv'.format(N)
+        with open(filename, 'w') as f:
+            f.write('\n'.join(iters))
 
     print('Done. Total iterations: {}'.format(k))
     return dict(fmin=fk, x_star=xk, gradient=gk, inv_hessian=Hk)
@@ -222,7 +244,7 @@ def _reconstruct(H0, gk, s, y):
     return -r    # r = np.dot(Hk, gk), need to return negative
 
     
-def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
+def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, output=False, disp=True):
     """ Limited memory BFGS algorithm """
     x0 = np.asarray(x0).flatten()
     if maxiter is None:
@@ -236,6 +258,7 @@ def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
     fk = fun(x0)
     s = deque(maxlen=maxlen)
     y = deque(maxlen=maxlen)
+    iters = []
     
     # calculate first pair
     alpha_k = _line_search(fun, fp, xk, gk, -gk)
@@ -265,7 +288,11 @@ def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
         gk = gk_new
         gknorm = _norm(gk)
         fk = fun(xk)
-        
+
+        # save iterations if choose to
+        if output:
+            iters.append('{:d},{:0.6f},{:0.6f}'.format(k, fk, gknorm))
+
         # add new sk, yk
         s.append(sk)
         y.append(yk)
@@ -282,6 +309,12 @@ def lbfgs(fun, fp, x0, norm=2, maxiter=None, maxlen=7, tol=1e-6, disp=True):
         k += 1
         if maxiter < k:
             break
+        
+    # save the iteration infos
+    if output:
+        filename = 'iters_lbfgs_f{}_m{}.csv'.format(N, maxlen)
+        with open(filename, 'w') as f:
+            f.write('\n'.join(iters))
 
     print('Done. Total iterations: {}'.format(k))
     
