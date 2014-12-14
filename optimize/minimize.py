@@ -129,10 +129,10 @@ def bfgs(fun, fp, x0, norm=2, maxiter=None, tol=1e-6, adjust_init_h=False, outpu
             iters.append('{:d},{:0.6f},{:0.6f}'.format(k, fk, gknorm))
 
         # update approximation of inverse Hessian using Sherman-Morrison formula
-        rhok = np.dot(sk, yk)
-        a1 = (rhok+np.dot(yk, np.dot(Hk, yk))) / rhok**2
-        a2 = 1. / rhok
-        Hk = Hk + a1 * (sk[:,np.newaxis]*sk[np.newaxis,:]) - a2 * (np.dot(Hk, yk[:,np.newaxis]*sk[np.newaxis,:])+np.dot((sk[:,np.newaxis]*yk[np.newaxis,:]), Hk))
+        rhok = 1. / np.dot(sk, yk)
+        a1 = rhok * (sk[:,np.newaxis]*np.dot(Hk, yk)[np.newaxis,:] + yk[:,np.newaxis]*np.dot(Hk, sk)[np.newaxis,:])
+        a2 = (np.dot(np.dot(Hk, yk), yk)*rhok**2+rhok) * sk[:,np.newaxis]*sk[np.newaxis,:]
+        Hk = Hk - a1 + a2
 
         if disp:
             print('----------------------------------------------------')
